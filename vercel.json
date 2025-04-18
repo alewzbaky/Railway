@@ -9,11 +9,7 @@
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "index.js"
+      "dest": "/index.js"
     }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  },
-  "public": true
+  ]
 }
