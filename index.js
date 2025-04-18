@@ -38,6 +38,19 @@ app.use(async (req, res, next) => {
   }
 });
 
+// دالة مساعدة لإنشاء توقيع لمصادقة الطلب
+function createBinanceSignature(apiSecret, queryStringParams) {
+  const queryString = Object.entries(queryStringParams)
+    .map(([key, value]) => `${key}=${value}`)
+    .join('&');
+  
+  const crypto = require('crypto');
+  return crypto
+    .createHmac('sha256', apiSecret)
+    .update(queryString)
+    .digest('hex');
+}
+
 // مسار الصفحة الرئيسية
 app.get('/', (req, res) => {
   res.json({ status: 'online', service: 'Binance API Relay' });
@@ -136,6 +149,119 @@ app.get('/ticker/24hr', async (req, res) => {
   } catch (error) {
     console.error('Error fetching 24hr ticker:', error.message);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// مسار للحصول على معلومات الأرصدة (يتطلب مفاتيح API)
+app.get('/balances', async (req, res) => {
+  try {
+    // التحقق من وجود مفاتيح API في رؤوس الطلب
+    const apiKey = req.headers['x-api-key'];
+    const apiSecret = req.headers['x-api-secret'];
+    
+    if (!apiKey || !apiSecret) {
+      return res.status(400).json({ 
+        error: 'Missing API credentials', 
+        message: 'X-API-KEY and X-API-SECRET headers are required for account endpoints' 
+      });
+    }
+    
+    // إنشاء توقيع لمصادقة الطلب
+    const timestamp = Date.now();
+    const queryParams = { timestamp };
+    const signature = createBinanceSignature(apiSecret, queryParams);
+    
+    // إجراء الطلب مع التوقيع
+    const response = await axios.get(`${BINANCE_API_BASE}/api/v3/account`, {
+      params: {
+        ...queryParams,
+        signature
+      },
+      headers: {
+        'X-MBX-APIKEY': apiKey
+      }
+    });
+    
+    if (response.data && response.data.balances) {
+      // تصفية الأرصدة الصفرية في التنسيق المطلوب
+      const filteredBalances = response.data.balances
+        .filter(balance => parseFloat(balance.free) > 0 || parseFloat(balance.locked) > 0)
+        .map(balance => ({
+          asset: balance.asset,
+          available: balance.free,
+          onOrder: balance.locked
+        }));
+      
+      res.json(filteredBalances);
+    } else {
+      res.status(500).json({ error: 'Invalid response from Binance API' });
+    }
+  } catch (error) {
+    console.error('Error fetching account balances:', error.message);
+    
+    // إرجاع رسالة خطأ مفصلة
+    if (error.response) {
+      res.status(error.response.status).json({
+        error: 'Failed to fetch balances from Binance',
+        code: error.response.status,
+        message: error.response.data.msg || error.message
+      });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
+  }
+});
+
+// مسار للحصول على معلومات المعاملات (الطلبات المفتوحة)
+app.get('/openOrders', async (req, res) => {
+  try {
+    // التحقق من وجود مفاتيح API في رؤوس الطلب
+    const apiKey = req.headers['x-api-key'];
+    const apiSecret = req.headers['x-api-secret'];
+    
+    if (!apiKey || !apiSecret) {
+      return res.status(400).json({ 
+        error: 'Missing API credentials', 
+        message: 'X-API-KEY and X-API-SECRET headers are required for account endpoints' 
+      });
+    }
+    
+    // إنشاء توقيع لمصادقة الطلب
+    const timestamp = Date.now();
+    const queryParams = { timestamp };
+    
+    // إضافة رمز العملة إذا كان متوفرًا
+    if (req.query.symbol) {
+      queryParams.symbol = req.query.symbol;
+    }
+    
+    const signature = createBinanceSignature(apiSecret, queryParams);
+    
+    // إجراء الطلب مع التوقيع
+    const response = await axios.get(`${BINANCE_API_BASE}/api/v3/openOrders`, {
+      params: {
+        ...queryParams,
+        signature
+      },
+      headers: {
+        'X-MBX-APIKEY': apiKey
+      }
+    });
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching open orders:', error.message);
+    
+    // إرجاع رسالة خطأ مفصلة
+    if (error.response) {
+      res.status(error.response.status).json({
+        error: 'Failed to fetch open orders from Binance',
+        code: error.response.status,
+        message: error.response.data.msg || error.message
+      });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
   }
 });
 
