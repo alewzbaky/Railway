@@ -3,6 +3,7 @@ const axios = require('axios');
 const cors = require('cors');
 const helmet = require('helmet');
 const { RateLimiterMemory } = require('rate-limiter-flexible');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -44,7 +45,6 @@ function createBinanceSignature(apiSecret, queryStringParams) {
     .map(([key, value]) => `${key}=${value}`)
     .join('&');
   
-  const crypto = require('crypto');
   return crypto
     .createHmac('sha256', apiSecret)
     .update(queryString)
@@ -212,7 +212,54 @@ app.get('/balances', async (req, res) => {
   }
 });
 
-// مسار للحصول على معلومات المعاملات (الطلبات المفتوحة)
+// مسار للحصول على معلومات الحساب الكاملة
+app.get('/account', async (req, res) => {
+  try {
+    // التحقق من وجود مفاتيح API في رؤوس الطلب
+    const apiKey = req.headers['x-api-key'];
+    const apiSecret = req.headers['x-api-secret'];
+    
+    if (!apiKey || !apiSecret) {
+      return res.status(400).json({ 
+        error: 'Missing API credentials', 
+        message: 'X-API-KEY and X-API-SECRET headers are required for account endpoints' 
+      });
+    }
+    
+    // إنشاء توقيع لمصادقة الطلب
+    const timestamp = Date.now();
+    const queryParams = { timestamp };
+    const signature = createBinanceSignature(apiSecret, queryParams);
+    
+    // إجراء الطلب مع التوقيع
+    const response = await axios.get(`${BINANCE_API_BASE}/api/v3/account`, {
+      params: {
+        ...queryParams,
+        signature
+      },
+      headers: {
+        'X-MBX-APIKEY': apiKey
+      }
+    });
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching account info:', error.message);
+    
+    // إرجاع رسالة خطأ مفصلة
+    if (error.response) {
+      res.status(error.response.status).json({
+        error: 'Failed to fetch account info from Binance',
+        code: error.response.status,
+        message: error.response.data.msg || error.message
+      });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
+  }
+});
+
+// مسار للحصول على المعاملات المفتوحة
 app.get('/openOrders', async (req, res) => {
   try {
     // التحقق من وجود مفاتيح API في رؤوس الطلب
@@ -256,6 +303,71 @@ app.get('/openOrders', async (req, res) => {
     if (error.response) {
       res.status(error.response.status).json({
         error: 'Failed to fetch open orders from Binance',
+        code: error.response.status,
+        message: error.response.data.msg || error.message
+      });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
+  }
+});
+
+// مسار للحصول على سجل المعاملات
+app.get('/myTrades', async (req, res) => {
+  try {
+    // التحقق من وجود مفاتيح API في رؤوس الطلب
+    const apiKey = req.headers['x-api-key'];
+    const apiSecret = req.headers['x-api-secret'];
+    
+    if (!apiKey || !apiSecret) {
+      return res.status(400).json({ 
+        error: 'Missing API credentials', 
+        message: 'X-API-KEY and X-API-SECRET headers are required for account endpoints' 
+      });
+    }
+    
+    // التحقق من وجود رمز العملة (مطلوب لهذه النقطة النهائية)
+    if (!req.query.symbol) {
+      return res.status(400).json({ 
+        error: 'Missing symbol parameter', 
+        message: 'Symbol parameter is required for myTrades endpoint' 
+      });
+    }
+    
+    // إنشاء توقيع لمصادقة الطلب
+    const timestamp = Date.now();
+    const queryParams = { 
+      timestamp,
+      symbol: req.query.symbol
+    };
+    
+    // إضافة معلمات اختيارية إذا كانت متوفرة
+    if (req.query.limit) queryParams.limit = req.query.limit;
+    if (req.query.fromId) queryParams.fromId = req.query.fromId;
+    if (req.query.startTime) queryParams.startTime = req.query.startTime;
+    if (req.query.endTime) queryParams.endTime = req.query.endTime;
+    
+    const signature = createBinanceSignature(apiSecret, queryParams);
+    
+    // إجراء الطلب مع التوقيع
+    const response = await axios.get(`${BINANCE_API_BASE}/api/v3/myTrades`, {
+      params: {
+        ...queryParams,
+        signature
+      },
+      headers: {
+        'X-MBX-APIKEY': apiKey
+      }
+    });
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching trade history:', error.message);
+    
+    // إرجاع رسالة خطأ مفصلة
+    if (error.response) {
+      res.status(error.response.status).json({
+        error: 'Failed to fetch trade history from Binance',
         code: error.response.status,
         message: error.response.data.msg || error.message
       });
