@@ -16,5 +16,5 @@ app.get("/api/market-data/:symbol", async (req, res) => {
   }
 });
 
-// ✅ هذا السطر أهم سطر لتوافق Vercel (يرجع Function handler)
+// ✅ هذا السطر يجعل الكود يشتغل على Vercel بشكل صحيح
 module.exports = (req, res) => app(req, res);
