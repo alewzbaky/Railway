@@ -1,16 +1,19 @@
 {
-  "name": "my-project",
+  "name": "binance-relay",
   "version": "1.0.0",
-  "description": "A simple Node.js project for Vercel deployment.",
+  "description": "Binance API Relay Server",
   "main": "index.js",
-  "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+  "engines": {
+    "node": "18.x"
   },
-  "author": "Your Name",
-  "license": "MIT",
-  "dependencies": {},
-  "devDependencies": {
-    "nodemon": "^3.0.0"
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.3.4",
+    "cors": "^2.8.5",
+    "helmet": "^6.0.1",
+    "rate-limiter-flexible": "^2.4.1"
   }
 }
