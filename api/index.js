@@ -1,22 +1,16 @@
-const express = require("express");
 const axios = require("axios");
-const cors = require("cors");
 
-const app = express();
-app.use(cors());
+module.exports = async (req, res) => {
+  const symbol = req.query.symbol;
 
-app.get("/api/market-data/:symbol", async (req, res) => {
+  if (!symbol) {
+    return res.status(400).json({ error: "Symbol is required" });
+  }
+
   try {
-    const { symbol } = req.params;
-    const response = await axios.get(
-      `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`
-    );
-    res.json(response.data);
-  } catch (err) {
-    console.error("Error fetching from Binance:", err.message);
+    const response = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
+    res.status(200).json(response.data);
+  } catch (error) {
     res.status(500).json({ error: "Failed to fetch data from Binance" });
   }
-});
-
-// هذا هو handler المطلوب لـ Vercel
-module.exports = (req, res) => app(req, res);
+};
